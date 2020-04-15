@@ -5,7 +5,11 @@ import time
 import numpy as np
 import cv2
 import queue
-from ds2_controller import DS2_Controller
+
+# custom libraries
+from ds2_controller import DS2_Controller # dualshock2 controller module
+from lane_image_functions import * # lane detection image processing functions
+from laneDetect import * # lane detection algorithm
 
 
 """ Init Controller """
@@ -18,11 +22,13 @@ joystick = pygame.joystick.Joystick(0)  # get joystick
 joystick.init()                         # init joystick
 controller = DS2_Controller(joystick)
 
+
 """ CONSTANTS """
 IM_WIDTH    = 1280
 IM_HEIGHT   = 720
 GLOBAL_FONT = cv2.FONT_HERSHEY_SIMPLEX
 CAR_SPAWN_POINT = carla.Transform(carla.Location(x=-30, y=207.5, z=1))
+
 
 
 # set up video writer
@@ -116,8 +122,8 @@ def get_driving_status(vehicle_actor, image):
     return res
 
 def apply_car_control(control_obj):
-    throttle_limit = 0.4
-    steering_limit = 0.4
+    throttle_limit = 0.3
+    steering_limit = 0.3
 
     # throttle and brake
     if controller.analog_left_y <= -0.2:
@@ -151,9 +157,9 @@ def apply_car_control(control_obj):
 def spawn_camera(camera_blueprint, camera_spawnpoint):
     camera_blueprint.set_attribute("image_size_x", f"{IM_WIDTH}")
     camera_blueprint.set_attribute("image_size_y", f"{IM_HEIGHT}")
-    camera_blueprint.set_attribute("fov", "130")
+    camera_blueprint.set_attribute("fov", "80")
     camera_blueprint.set_attribute("lens_circle_falloff", "0")
-    camera_blueprint.set_attribute("sensor_tick", "0.2")  # capture image every 0.3 seconds
+    camera_blueprint.set_attribute("sensor_tick", "0.3")  # capture image every 0.3 seconds
 
     sensor = world.try_spawn_actor(camera_blueprint, camera_spawnpoint, attach_to=vehicle)
 
@@ -162,6 +168,7 @@ def spawn_camera(camera_blueprint, camera_spawnpoint):
 def show_image(image):
     cv2.imshow("", image)
     cv2.waitKey(1)
+
 
 
 """ PROGRAM BEGINS """
@@ -199,7 +206,7 @@ try:
     camera_bp = bp_lib.find("sensor.camera.rgb")
 
     # adjust sensor location relative to vehicle
-    camera_spawn_point = carla.Transform(carla.Location(x=4.0, z=1.7), carla.Rotation(pitch=-18.0))
+    camera_spawn_point = carla.Transform(carla.Location(x=4.0, z=1.2), carla.Rotation(pitch=0.0))
 
     # spawn camera
     sensor = spawn_camera(camera_bp, camera_spawn_point)
@@ -213,12 +220,13 @@ try:
 
     GameDone = False  # flag to stop this client (press Ctrl+C to stop)
 
+    use_lane_detect = True
 
     """ GAME STARTS HERE """
     while not GameDone:
         world.tick()  # signal the server to update
 
-        # read events when user do something
+        # read events when user does something
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 GameDone = True
@@ -230,9 +238,17 @@ try:
         # get image
         img = image_queue.get()
         img = get_image(img)
-
-        # lane detection
         
+        # toggle lane detection
+        use_lane_detect = not use_lane_detect if controller.R[1] else use_lane_detect
+        if use_lane_detect:
+            # lane detection
+            warped, M, Minv = perspectiveTransform(img)
+            bin_warped      = process_threshold(warped)
+            left_fit, right_fit, slidingWin = laneWindowSearch(bin_warped)
+            unwarped = cv2.warpPerspective(slidingWin, Minv, (IM_WIDTH, IM_HEIGHT))
+            dist, side = getLaneOffset(unwarped, left_fit, right_fit)
+            img = cv.addWeighted(img, 1, unwarped, 1, 0)
 
         # show general status
         img = get_carla_status(vehicle, img)
@@ -252,10 +268,3 @@ finally:
         actor.destroy()
     print("done.")
 
-
-
-
-""" UNUSED CODE FRAGMENTS """
-def print_loc(obj):
-    obj = vehicle.get_location()
-    print(f"x: {obj.x}, y: {obj.y}, z: {obj.z}")

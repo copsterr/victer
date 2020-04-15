@@ -238,8 +238,8 @@ def getLaneOffset(image, left_fit, right_fit, imsize=(720, 1280), x_mpp=3.7 / 90
     
         # Draw Distance from center Line
         cv.line(image, (int(lane_center), img_h - 40), (int(img_center), img_h - 40), (200, 250, 150), 2)
-        cv.putText(image, "Distance from center: " + str(abs(round(dist, 2))) +"m", (30, 30), cv.FONT_HERSHEY_SIMPLEX, 0.8, (BGR_RED), 2)
-        cv.putText(image, "Car on side: " + side, (30, 60), cv.FONT_HERSHEY_SIMPLEX, 0.8, (BGR_RED), 2)
+        cv.putText(image, "Distance from center: " + str(abs(round(dist, 2))) +"m", (900, 30), cv.FONT_HERSHEY_SIMPLEX, 0.7, (BGR_RED), 2)
+        cv.putText(image, "Car on side: " + side, (900, 60), cv.FONT_HERSHEY_SIMPLEX, 0.7, (BGR_RED), 2)
 
     return np.absolute(dist), side
     
